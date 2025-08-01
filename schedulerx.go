@@ -2,10 +2,9 @@ package schedulerx
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slog"
 )
 
 // usecase operation with things that we will parse per time
@@ -19,20 +18,21 @@ type task struct {
 }
 
 type Parser struct {
-	loggerCtx context.Context
 	wg        *sync.WaitGroup
 	quit      chan struct{}
+	loggerCtx context.Context
 	mu        sync.Mutex
 	running   bool
 	logger    *slog.Logger
 	handlers  []task
 }
 
-func NewParser(opts ...Option) *Parser {
+func NewParser(ctx context.Context, opts ...Option) *Parser {
 	p := &Parser{
-		wg:       &sync.WaitGroup{},
-		quit:     make(chan struct{}),
-		handlers: []task{},
+		wg:        &sync.WaitGroup{},
+		quit:      make(chan struct{}),
+		handlers:  []task{},
+		loggerCtx: ctx,
 	}
 	for _, opt := range opts {
 		err := opt(p)
@@ -79,7 +79,7 @@ func (j *Parser) Run(fn func() error, flushInterval time.Duration) {
 			case <-time.After(flushInterval):
 				err := fn()
 				if err != nil {
-					slog.ErrorCtx(j.loggerCtx, "Error: "+err.Error())
+					j.logger.ErrorContext(j.loggerCtx, "Error: "+err.Error())
 				}
 			case <-j.quit: // Check if the quit signal is received
 				return
